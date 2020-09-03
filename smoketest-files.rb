@@ -6,7 +6,7 @@ require 'json'
 TIMEOUT = 10000
 TOTAL = 500
 VERBOSE = true
-UP = 'http://bee-0'
+UP = 'http://bee-0.vandot.svc.cluster.local:8080'
 DOWN = 'https://gateway.ethswarm.org'
 
 SIZE = 1024
@@ -28,14 +28,14 @@ def get h, filepath_out, md5, tries = 0
   time2 = ((end_time - beginning_time)*1000).to_i
   if r == md5
     puts "Retrieved in #{time2} ms - #{h} #{r.strip.chomp}" if VERBOSE
-    cmd = "echo 'smoke_get_success_time{hash=\"#{h}\",md5=\"#{r.strip.chomp}\"} #{time2}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+    cmd = "echo 'smoke_get_success_time{instance=\"'${HOSTNAME}'\",hash=\"#{h}\",md5=\"#{r.strip.chomp}\"} #{time2}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
     `#{cmd}` if PUSH_METRICS
     return [h, time2]
   elsif tries < MAX_TRIES
     rr = `cat #{filepath_out} | md5sum | cut -d' ' -f1`
     puts "Error retrieving #{h} after #{tries+1} tries in #{time2}ms: #{rr.strip.chomp}" if VERBOSE 
     puts "Waiting #{RETRY_WAIT}s" if VERBOSE
-    cmd = "echo 'smoke_get_failure_time{hash=\"#{h}\",md5=\"#{md5.strip.chomp}\"} #{time2}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+    cmd = "echo 'smoke_get_failure_time{instance=\"'${HOSTNAME}'\",hash=\"#{h}\",md5=\"#{md5.strip.chomp}\"} #{time2}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
     `#{cmd}` if PUSH_METRICS
     sleep RETRY_WAIT
     return get h, filepath_out, md5, tries + 1
@@ -56,7 +56,7 @@ def post filepath_in, md5, tries = 0
     h = JSON.parse(resp)["reference"]
     end_time = Time.now
     time1 = ((end_time - beginning_time)*1000).to_i
-    cmd = "echo 'smoke_post_success_time{md5=\"#{md5.strip.chomp}\"} #{time1}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+    cmd = "echo 'smoke_post_success_time{instance=\"'${HOSTNAME}'\",md5=\"#{md5.strip.chomp}\"} #{time1}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
     `#{cmd}` if PUSH_METRICS
     puts "Posted #{h} in #{time1} ms" if VERBOSE
     return [h, time1, tries]
@@ -66,7 +66,7 @@ def post filepath_in, md5, tries = 0
       puts "Waiting #{RETRY_WAIT}s" if VERBOSE
       end_time = Time.now
       time1 = ((end_time - beginning_time)*1000).to_i
-      cmd = "echo 'smoke_post_failure_time{md5=\"#{md5.strip.chomp}\"} #{time1}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+      cmd = "echo 'smoke_post_failure_time{instance=\"'${HOSTNAME}'\",md5=\"#{md5.strip.chomp}\"} #{time1}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
       `#{cmd}` if PUSH_METRICS
       sleep RETRY_WAIT
       return post filepath_in, md5, tries + 1
@@ -128,11 +128,11 @@ puts "\nRESULTS ------\n\n"
 puts "#{datas.count} processed in total"
 ds = datas.reject{|d| d[1] === false}.count
 puts "#{ds}/#{TOTAL} completed successfully"
-cmd = "echo 'smoke_success_total{total_tries=\"#{datas.count}\"} #{ds}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+cmd = "echo 'smoke_success_total{instance=\"'${HOSTNAME}'\",total_tries=\"#{datas.count}\"} #{ds}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
 `#{cmd}` if PUSH_METRICS
 ds = datas.reject{|d| d[2] == nil}
 puts "#{ds.count}/#{TOTAL} required retries"
-cmd = "echo 'smoke_failure_total{total_tries=\"#{datas.count}\"} #{ds}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+cmd = "echo 'smoke_failure_total{instance=\"'${HOSTNAME}'\",total_tries=\"#{datas.count}\"} #{ds}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
 `#{cmd}` if PUSH_METRICS
 
 limits = [100,200,500,1000,1500,3000,5000,10000]

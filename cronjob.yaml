@@ -1,0 +1,15 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: smoketest-files
+spec:
+  schedule: "*/30 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: smoketest-files
+            image: "vandot/smoketest-files"
+            imagePullPolicy: "Always"
+          restartPolicy: OnFailure
