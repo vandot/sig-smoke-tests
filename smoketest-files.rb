@@ -6,33 +6,41 @@ require 'json'
 TIMEOUT = 10000
 TOTAL = 500
 VERBOSE = true
-UP = 'http://localhost:8083'
-DOWN = 'http://localhost:8083'
+UP = 'http://bee-0'
+DOWN = 'https://gateway.ethswarm.org'
 
 SIZE = 1024
 
 RETRY_WAIT = 5
 MAX_TRIES = 5
 
+PUSH_METRICS = true
+PUSHGATEWAY_URL = 'http://pushgateway.staging.internal'
+JOB_NAME = 'smoke_test'
+
 @retry_cmds = []
 
 def get h, filepath_out, md5, tries = 0
   beginning_time = Time.now
-  cmd = "curl -s --connect-timeout #{TIMEOUT} -m #{TIMEOUT} -s #{DOWN}/files/#{h}  > #{filepath_out} && cat #{filepath_out} | md5"
+  cmd = "curl -s --connect-timeout #{TIMEOUT} -m #{TIMEOUT} -s #{DOWN}/files/#{h}  > #{filepath_out} && cat #{filepath_out} | md5sum | cut -d' ' -f1"
   r = `#{cmd}`
   end_time = Time.now
   time2 = ((end_time - beginning_time)*1000).to_i
   if r == md5
-    puts "Retrieved in #{time2} ms - #{h} #{r}" if VERBOSE
+    puts "Retrieved in #{time2} ms - #{h} #{r.strip.chomp}" if VERBOSE
+    cmd = "echo 'smoke_get_success_time{hash=\"#{h}\",md5=\"#{r.strip.chomp}\"} #{time2}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+    `#{cmd}` if PUSH_METRICS
     return [h, time2]
   elsif tries < MAX_TRIES
-    rr = `cat #{filepath_out} | md5`
+    rr = `cat #{filepath_out} | md5sum | cut -d' ' -f1`
     puts "Error retrieving #{h} after #{tries+1} tries in #{time2}ms: #{rr.strip.chomp}" if VERBOSE 
-    puts "Waiting #{RETRY_WAIT}s" if VERBOSE 
+    puts "Waiting #{RETRY_WAIT}s" if VERBOSE
+    cmd = "echo 'smoke_get_failure_time{hash=\"#{h}\",md5=\"#{md5.strip.chomp}\"} #{time2}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+    `#{cmd}` if PUSH_METRICS
     sleep RETRY_WAIT
     return get h, filepath_out, md5, tries + 1
   else
-    rr = `cat #{filepath_out} | md5`
+    rr = `cat #{filepath_out} | md5sum | cut -d' ' -f1`
     puts "Error retrieving #{h} after #{tries+1} tries in #{time2}ms: #{rr.strip.chomp}" if VERBOSE 
     puts "cmd to retry: #{cmd}"
     @retry_cmds.push cmd
@@ -48,12 +56,18 @@ def post filepath_in, md5, tries = 0
     h = JSON.parse(resp)["reference"]
     end_time = Time.now
     time1 = ((end_time - beginning_time)*1000).to_i
+    cmd = "echo 'smoke_post_success_time{md5=\"#{md5.strip.chomp}\"} #{time1}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+    `#{cmd}` if PUSH_METRICS
     puts "Posted #{h} in #{time1} ms" if VERBOSE
     return [h, time1, tries]
   rescue Exception => e
     if tries < MAX_TRIES
       puts "Error posting after #{tries+1} tries in #{time1}ms: #{resp.strip.chomp}" if VERBOSE 
-      puts "Waiting #{RETRY_WAIT}s" if VERBOSE 
+      puts "Waiting #{RETRY_WAIT}s" if VERBOSE
+      end_time = Time.now
+      time1 = ((end_time - beginning_time)*1000).to_i
+      cmd = "echo 'smoke_post_failure_time{md5=\"#{md5.strip.chomp}\"} #{time1}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+      `#{cmd}` if PUSH_METRICS
       sleep RETRY_WAIT
       return post filepath_in, md5, tries + 1
     else
@@ -79,7 +93,7 @@ while i<TOTAL
   filepath_in = "/tmp/#{data}-i.txt"
   filepath_out = "/tmp/#{data}-o.txt"
 
-  md5 = `head -c #{SIZE} < /dev/urandom > #{filepath_in} && cat #{filepath_in} | md5`
+  md5 = `head -c #{SIZE} < /dev/urandom > #{filepath_in} && cat #{filepath_in} | md5sum | cut -d' ' -f1`
 
   puts "created file #{filepath_in} with digest #{md5}"
 
@@ -114,9 +128,12 @@ puts "\nRESULTS ------\n\n"
 puts "#{datas.count} processed in total"
 ds = datas.reject{|d| d[1] === false}.count
 puts "#{ds}/#{TOTAL} completed successfully"
+cmd = "echo 'smoke_success_total{total_tries=\"#{datas.count}\"} #{ds}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+`#{cmd}` if PUSH_METRICS
 ds = datas.reject{|d| d[2] == nil}
 puts "#{ds.count}/#{TOTAL} required retries"
-
+cmd = "echo 'smoke_failure_total{total_tries=\"#{datas.count}\"} #{ds}' | curl -s --data-binary @- #{PUSHGATEWAY_URL}/metrics/job/#{JOB_NAME}"
+`#{cmd}` if PUSH_METRICS
 
 limits = [100,200,500,1000,1500,3000,5000,10000]
 
@@ -143,3 +160,7 @@ limits.each_with_index do |l,i|
     puts "#{ds} GET requests #{ll}-#{l} ms"
   end
 end
+
+# clean
+cmd = "rm /tmp/*-{i,o}.txt"
+`#{cmd}`
