@@ -26,13 +26,13 @@ def get h, filepath_out, md5, tries = 0
     puts "Retrieved in #{time2} ms - #{h} #{r}" if VERBOSE
     return [h, time2]
   elsif tries < MAX_TRIES
-    rr = `cat #{filepath_out}`
+    rr = `cat #{filepath_out} | md5`
     puts "Error retrieving #{h} after #{tries+1} tries in #{time2}ms: #{rr.strip.chomp}" if VERBOSE 
     puts "Waiting #{RETRY_WAIT}s" if VERBOSE 
     sleep RETRY_WAIT
     return get h, filepath_out, md5, tries + 1
   else
-    rr = `cat #{filepath_out}`
+    rr = `cat #{filepath_out} | md5`
     puts "Error retrieving #{h} after #{tries+1} tries in #{time2}ms: #{rr.strip.chomp}" if VERBOSE 
     puts "cmd to retry: #{cmd}"
     @retry_cmds.push cmd
