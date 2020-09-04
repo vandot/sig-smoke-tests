@@ -3,16 +3,17 @@
 require 'json'
 # require 'byebug'
 
-TIMEOUT = 10000
+TIMEOUT = 5
 TOTAL = 500
 VERBOSE = true
 UP = 'http://bee-0.vandot.svc.cluster.local:8080'
+# UP = 'http://localhost:8080'
 DOWN = 'https://gateway.ethswarm.org'
 
 SIZE = 1024
 
 RETRY_WAIT = 5
-MAX_TRIES = 5
+MAX_TRIES = 3
 
 PUSH_METRICS = true
 PUSHGATEWAY_URL = 'http://pushgateway.staging.internal'
