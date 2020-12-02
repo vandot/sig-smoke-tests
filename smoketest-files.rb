@@ -6,9 +6,9 @@ require 'json'
 TIMEOUT = 5
 TOTAL = 500
 VERBOSE = true
-UP = 'http://bee-0.vandot.svc.cluster.local:8080'
+UP = 'http://bee-0.sig.svc.cluster.local:1633'
 # UP = 'http://localhost:8080'
-DOWN = 'https://gateway.ethswarm.org'
+DOWN = 'https://gateway.staging.ethswarm.org'
 
 SIZE = 1024
 
